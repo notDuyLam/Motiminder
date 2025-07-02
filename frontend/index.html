@@ -2,8 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Motiminder - Reminder App</title>
+    
+    <!-- PWA Meta Tags for Mobile -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Motiminder">
+    <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgdmlld0JveD0iMCAwIDE5MiAxOTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjE5MiIgaGVpZ2h0PSIxOTIiIHJ4PSIyNCIgZmlsbD0iIzY2N2VlYSIvPjx0ZXh0IHg9Ijk2IiB5PSIxMDQiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSI2NCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPvCfk4U8L3RleHQ+PC9zdmc+">
+    
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
@@ -14,19 +23,59 @@
         safari_web_id: "web.onesignal.auto.532534a2-fa6b-4796-aab8-c4e8f72a79c0",
         notifyButton: {
             enable: true,
+            size: 'large',
+            theme: 'default',
+            position: 'bottom-right',
+            showCredit: false,
         },
+        allowLocalhostAsSecureOrigin: true,
         });
 
-        // Debug: Check if user is subscribed
-        const isSubscribed = await OneSignal.User.PushSubscription.optedIn;
-        console.log('OneSignal subscription status:', isSubscribed);
+        // Mobile-specific permission handling
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         
-        // Debug: Get user ID
-        const userId = await OneSignal.User.PushSubscription.id;
-        console.log('OneSignal User ID:', userId);
+        // Debug info - visible on page for mobile debugging
+        const debugInfo = document.createElement('div');
+        debugInfo.id = 'debug-info';
+        debugInfo.style.cssText = 'position:fixed;top:0;left:0;background:rgba(0,0,0,0.8);color:white;padding:10px;font-size:12px;z-index:9999;max-width:100%;';
         
-        // Debug: Check notification permission
-        console.log('Notification permission:', Notification.permission);
+        try {
+            const isSubscribed = await OneSignal.User.PushSubscription.optedIn;
+            const userId = await OneSignal.User.PushSubscription.id;
+            const permission = Notification.permission;
+            
+            debugInfo.innerHTML = `
+                Device: ${isMobile ? 'Mobile' : 'Desktop'}<br>
+                Subscribed: ${isSubscribed}<br>
+                Permission: ${permission}<br>
+                User ID: ${userId ? 'Yes' : 'No'}<br>
+                Browser: ${navigator.userAgent.includes('Chrome') ? 'Chrome' : navigator.userAgent.includes('Safari') ? 'Safari' : 'Other'}
+            `;
+            
+            // Show debug info for 10 seconds on mobile
+            if (isMobile) {
+                document.body.appendChild(debugInfo);
+                setTimeout(() => debugInfo.remove(), 10000);
+            }
+            
+            // Auto-request permission on mobile if not set
+            if (isMobile && permission === 'default') {
+                setTimeout(async () => {
+                    try {
+                        await OneSignal.Notifications.requestPermission();
+                    } catch (error) {
+                        console.error('Mobile permission request failed:', error);
+                    }
+                }, 2000);
+            }
+            
+        } catch (error) {
+            debugInfo.innerHTML = `Error: ${error.message}`;
+            if (isMobile) {
+                document.body.appendChild(debugInfo);
+                setTimeout(() => debugInfo.remove(), 10000);
+            }
+        }
     });
     </script>
 </head>
@@ -35,6 +84,14 @@
         <header>
             <h1>Motiminder</h1>
             <p class="subtitle">Stay organized with smart reminders</p>
+            
+            <!-- Mobile-specific notification prompt -->
+            <div id="mobile-notification-prompt" style="display:none; background:#3b82f6; color:white; padding:15px; border-radius:8px; margin:10px 0; text-align:center;">
+                <p style="margin:0 0 10px 0;">📱 Enable notifications to receive your reminders!</p>
+                <button onclick="enableMobileNotifications()" style="background:white; color:#3b82f6; border:none; padding:8px 16px; border-radius:4px; font-weight:600;">
+                    Enable Notifications
+                </button>
+            </div>
         </header>
         
         <main>
@@ -104,7 +161,28 @@
         // Load existing reminders when page loads
         document.addEventListener('DOMContentLoaded', function() {
             loadReminders();
+            
+            // Show mobile notification prompt if needed
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            if (isMobile && Notification.permission === 'default') {
+                document.getElementById('mobile-notification-prompt').style.display = 'block';
+            }
         });
+
+        // Mobile notification enabler
+        async function enableMobileNotifications() {
+            try {
+                const permission = await OneSignal.Notifications.requestPermission();
+                if (permission) {
+                    document.getElementById('mobile-notification-prompt').style.display = 'none';
+                    showMessage('✅ Notifications enabled! You\'ll receive reminders on this device.', 'success');
+                } else {
+                    showMessage('❌ Please enable notifications in your browser settings for reminders to work.', 'error');
+                }
+            } catch (error) {
+                showMessage('❌ Could not enable notifications. Try refreshing the page.', 'error');
+            }
+        }
 
         // Form handling
         document.getElementById('reminderForm').addEventListener('submit', async function(e) {
