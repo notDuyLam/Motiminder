@@ -16,6 +16,17 @@
             enable: true,
         },
         });
+
+        // Debug: Check if user is subscribed
+        const isSubscribed = await OneSignal.User.PushSubscription.optedIn;
+        console.log('OneSignal subscription status:', isSubscribed);
+        
+        // Debug: Get user ID
+        const userId = await OneSignal.User.PushSubscription.id;
+        console.log('OneSignal User ID:', userId);
+        
+        // Debug: Check notification permission
+        console.log('Notification permission:', Notification.permission);
     });
     </script>
 </head>
@@ -67,6 +78,12 @@
                         Create Reminder
                     </button>
                 </form>
+                
+                <!-- Test Notification Button -->
+                <button onclick="testNotification()" class="test-btn" style="margin-top: 15px; background: #22c55e;">
+                    <span class="btn-icon">🔔</span>
+                    Test Notification
+                </button>
             </div>
             
             <div class="reminders-list">
@@ -226,6 +243,33 @@
             setTimeout(() => {
                 messageDiv.remove();
             }, 3000);
+        }
+
+        // Test notification function
+        async function testNotification() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/test-notification`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        title: 'Test Notification',
+                        message: 'Hello from Motiminder! 🎉'
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage('Test notification sent! Check your notifications.', 'success');
+                } else {
+                    showMessage('Failed to send test notification: ' + (result.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error sending test notification:', error);
+                showMessage('Failed to connect to server', 'error');
+            }
         }
     </script>
 </body>
